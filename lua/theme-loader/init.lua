@@ -26,4 +26,6 @@ function M.setup(user_config)
 	loader.load_theme()
 end
 
+M.reload_theme = loader.reload_theme
+
 return M
