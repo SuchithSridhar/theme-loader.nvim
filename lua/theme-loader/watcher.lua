@@ -1,4 +1,5 @@
 local M = {}
+local uv = vim.loop
 local debounce_timer = nil
 
 -- Debounce function to prevent frequent reloads
@@ -7,13 +8,10 @@ local function debounce(callback, delay)
 		debounce_timer:stop()
 	end
 
-	debounce_timer = vim.loop.new_timer()
+	debounce_timer = uv.new_timer()
 	debounce_timer:start(delay, 0, function()
 		vim.schedule(function()
-			-- Add an extra small delay for ensuring file writes are completed
-			vim.defer_fn(function()
-				callback() -- Safely execute the callback on the main thread after the final wait
-			end, 500) -- Extra delay (500ms) for file write completion (adjust as needed)
+			callback() -- Safely execute the callback on the main thread
 		end)
 		debounce_timer:stop()
 		debounce_timer:close()
@@ -22,11 +20,13 @@ local function debounce(callback, delay)
 end
 
 function M.watch(theme_file, callback)
-	local has_fwatch, fwatch = pcall(require, "fwatch")
-	if not has_fwatch then
+	-- Create a file watcher
+	local handle = uv.new_fs_event()
+
+	if not handle then
 		vim.schedule(function()
 			vim.api.nvim_echo(
-				{ { "Theme-loader: 'fwatch.nvim' not installed. File watching disabled.", "WarningMsg" } },
+				{ { "Theme-loader: Failed to create file watcher for " .. theme_file, "ErrorMsg" } },
 				false,
 				{}
 			)
@@ -34,18 +34,37 @@ function M.watch(theme_file, callback)
 		return
 	end
 
-	-- Watch for changes using fwatch.nvim
-	fwatch.watch(theme_file, {
-		on_event = function()
-			-- Debounce and schedule the callback function
-			debounce(function()
-				vim.schedule(function()
-					callback() -- Reload theme safely
-					vim.api.nvim_echo({ { "Theme-loader: theme reloaded.", "None" } }, false, {})
-				end)
-			end, 700) -- (ms) debounce time (including buffer time)
-		end,
-	})
+	local function on_event(err, filename, events)
+		if err then
+			vim.schedule(function()
+				vim.api.nvim_echo({ { "Theme-loader: Error watching file: " .. err, "ErrorMsg" } }, false, {})
+			end)
+			return
+		end
+
+		-- Debounce and only reload when the file changes
+		debounce(function()
+			callback()
+			print("Theme-loader: Theme reloaded due to changes in " .. theme_file)
+		end, 1200) -- Wait 1.2 seconds to ensure file writes complete
+	end
+
+	-- Start watching the file
+	uv.fs_event_start(handle, theme_file, {}, on_event)
+
+	vim.schedule(function()
+		print("Theme-loader: Watching for changes in " .. theme_file)
+	end)
+
+	-- Return the handle to allow unwatching if necessary
+	return handle
+end
+
+function M.unwatch(handle)
+	if handle then
+		uv.fs_event_stop(handle)
+		handle:close()
+	end
 end
 
 return M

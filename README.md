@@ -40,10 +40,6 @@ require("lazy").setup({
   {
     "suchithsridhar/theme-loader.nvim",
     event = "VeryLazy", -- Ensure plugin loaded after UI elements
-    dependencies = {
-      -- Optional dependency for file watching support
-      { "rktjmp/fwatch.nvim" },
-    },
     config = function()
       require("theme-loader").setup({
         theme_file = os.getenv("HOME") .. "/.config/theme.txt", -- Path to your theme file
