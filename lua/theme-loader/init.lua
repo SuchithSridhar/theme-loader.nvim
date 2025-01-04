@@ -1,5 +1,5 @@
-local loader = require("theme_loader.loader")
-local watcher = require("theme_loader.watcher")
+local loader = require("theme-loader.loader")
+local watcher = require("theme-loader.watcher")
 
 local M = {}
 
