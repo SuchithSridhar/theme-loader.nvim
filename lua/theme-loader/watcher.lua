@@ -10,7 +10,10 @@ local function debounce(callback, delay)
 	debounce_timer = vim.loop.new_timer()
 	debounce_timer:start(delay, 0, function()
 		vim.schedule(function()
-			callback() -- Safely execute the callback on the main thread
+			-- Add an extra small delay for ensuring file writes are completed
+			vim.defer_fn(function()
+				callback() -- Safely execute the callback on the main thread after the final wait
+			end, 500) -- Extra delay (500ms) for file write completion (adjust as needed)
 		end)
 		debounce_timer:stop()
 		debounce_timer:close()
@@ -22,7 +25,11 @@ function M.watch(theme_file, callback)
 	local has_fwatch, fwatch = pcall(require, "fwatch")
 	if not has_fwatch then
 		vim.schedule(function()
-			vim.notify("Theme-loader: 'fwatch.nvim' is not installed. File watching disabled.", vim.log.levels.WARN)
+			vim.api.nvim_echo(
+				{ { "Theme-loader: 'fwatch.nvim' not installed. File watching disabled.", "WarningMsg" } },
+				false,
+				{}
+			)
 		end)
 		return
 	end
@@ -34,11 +41,9 @@ function M.watch(theme_file, callback)
 			debounce(function()
 				vim.schedule(function()
 					callback() -- Reload theme safely
-					vim.schedule(function()
-						vim.api.nvim_echo({ { "Theme-loader: theme reloaded.", "None" } }, false, {})
-					end)
+					vim.api.nvim_echo({ { "Theme-loader: theme reloaded.", "None" } }, false, {})
 				end)
-			end, 1000) -- 1000ms debounce time
+			end, 700) -- (ms) debounce time (including buffer time)
 		end,
 	})
 end
